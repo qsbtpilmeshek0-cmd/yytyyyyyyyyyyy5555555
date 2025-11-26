@@ -4,9 +4,8 @@ import dropbox
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-DROPBOX_TOKEN = os.getenv("DROPBOX_TOKEN")
-
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+DROPBOX_TOKEN = os.environ.get("DROPBOX_TOKEN")
 SPECIAL_CODE = "Q_FBR_PASSPORTS/DATA.GB$04743"
 DROPBOX_FOLDER = "/passports"
 
@@ -27,7 +26,8 @@ async def download_file(path, local_name):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-
+    if not msg:
+        return
     if msg.text == SPECIAL_CODE:
         files = await list_files()
         if not files:
@@ -39,7 +39,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await msg.reply_photo(photo=photo_file)
             os.remove(f"temp_{f.name}")
         return
-
     if msg.photo:
         try:
             file = await msg.photo[-1].get_file()
@@ -52,16 +51,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await msg.reply_text(f"Что-то пошло не так на этапе архивации. Обратитесь к администратору архива @Qshka16\nОшибка: {e}")
         return
-
-    await msg.reply_text("Не удалось распознать. Отправьте фото паспорта или спецкод.")
+    await msg.reply_text("Не удалось распознать. Идите нахуй.")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Бот активен. Отправьте фото паспорта или спецкод.")
 
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.PHOTO | filters.TEXT, handle_message))
-
-if name == "main":
+if __name__ == "__main__":
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.ALL, handle_message))
     print("Бот запущен...")
     app.run_polling()
