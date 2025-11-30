@@ -1,64 +1,188 @@
 # I LOVE DESH BEARCHHHHH
-import os
-import dropbox
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
 
-BOT_TOKEN = os.environ.get("8517574417:AAFaAdMDJJzQlN1j8oBpR8_OmYYvFY2AD0w")
-DROPBOX_TOKEN = os.environ.get("sl.u.AGJQYXE5dI688ZNN667lQzz_02V9EVO-z3QZ49bYdv_Y2GgsQqv1Il9FmQF3_cXT0Xoft89zt5li_nSIJicbg1iLq-wC_lduZr9AIweX3O_tDqsM1W-P5qEe8mXM2eb4QbccYYK9VwjQMSSC89FN96f2vPvW8wRMvy9s2Z6ydjCXbkDVmopbfPEDqXxtuw9CQg_xWIECGocyShvL2e0vBJq9GmKDIxFKQVeg3zvsnyqPkMkEVwoTSFmmIhRvnKPO0xrMr01lFD-BY0kLuD_16ZlTACnYnU4C-jvYmjWhBbauGsjMfoY5rk8W9iTzLV7pPDoQR61h5ovRxlaTFiKoDWBMBiZr3LkaZo-P2e6cIhg3WtwLcUoLx_nFnOEoTUsvG9ZgkVfaEP55hKBiQs-0OmeUpzhGF41x9y40viovE1qAhwnCpA5Mr6yv5S6GLsgZDebU1CelTAkLHMcoDMZj1hwy7_ggu1WXek_P-RycN87bUANK96JkCHG19IiuZ1WiNgf_7WGLxl_Iz-kZfmTcJaaVO7pE4CmJWl_w4PnixMJvYMbQRNehY4l6oOu-6S3CgXJ3uwzfAIUD6pWtIueqjVP8K68JUxmKAWdPVXhwMBwNVMWq7OdCQ6e_emBczGyaU5uUxrbwv1f2hyfErV3QFMYIm-7oP7m3RQYgoeG9j8wg2A2UribScvI_Ud5XWk2B_Gg74rD1cBYtW34dqU8y_TLRP3WZgOnWoMVmnDjhmA8q2hWEnDklSm5GJan6Em0WjxKc4BN-gHTroMLeQWdRgE-GyIEPlvSLyMIBOAOWDD_A033myiR-5D5KdkhwRaIcR8D9KTKOpG4oD43dJnl3H0gOWaty6iAxXzeyA_bEB_qliqvsxy3K80p8TbdjIFVhA5Rm-ly3OXecVZ877f2ZmX_zidHybS0cB3i9324XpKP9fw3uP_ydXdBxjqCBF0O4XhV7CXjDtNF_VMt9pFXPRITMAakQl5sjPj8Zvu-8BMJ9cvK1OH858y57IkvCPJus4EQzSEVwXuH8xaHd_ciY7KOMGmFQ83wTEO9ajOn8n3HtX13eTVKRwiULrZ2oiBdJd_fQGpcvO751i4CICQRBsoUQPJ8XGdyTjE82LYSDVFOQgdayYEy_2h2WJNZ7nCUbWBPqxCkc1PTRk61oUu0KMAXnQACvxAfRKhs9SxYavl6CeLqeTLodIRiamLw-xzmZcMKJVf5BMIcl6Ea-ZzezTnysM0o79xoxXZzVCITxMXyAOm459qtqI-DxSiF2hc9TRtxa5iOX-ugrRDwGhYML1DfPNZ7QEmJZCxuXxND6yreDuEusax84Azwcl8uHCBw-gIJHN2zRtZHKgAJD1imtYsynMF2ScmzFQ2NW8pty2jB55wL5uLc32E6IJ2R3z8v07jvLZNQH19E1MocL1nBq")
-SPECIAL_CODE = "Q_FBR_PASSPORTS/DATA.GB$04743"
-DROPBOX_FOLDER = "/passports"
+import asyncio
+import sqlite3
+from aiogram import Bot, Dispatcher, Router, F
+from aiogram.types import (
+    Message, CallbackQuery,
+    InlineKeyboardMarkup, InlineKeyboardButton
+)
+from aiogram.filters import Command
 
-dbx = dropbox.Dropbox(DROPBOX_TOKEN)
+TOKEN = "ТОКЕН_ТВОЕГО_БОТА"
+ADMIN_ID = 123456789
 
-async def upload_to_dropbox(local_path, remote_name):
-    with open(local_path, "rb") as f:
-        dbx.files_upload(f.read(), f"{DROPBOX_FOLDER}/{remote_name}", mode=dropbox.files.WriteMode.overwrite)
+bot = Bot(TOKEN)
+dp = Dispatcher()
+router = Router()
+dp.include_router(router)
 
-async def list_files():
-    res = dbx.files_list_folder(DROPBOX_FOLDER)
-    return res.entries
+db = sqlite3.connect("bot.db")
+cur = db.cursor()
 
-async def download_file(path, local_name):
-    _, res = dbx.files_download(path)
-    with open(local_name, "wb") as f:
-        f.write(res.content)
+cur.execute("""
+CREATE TABLE IF NOT EXISTS reviews(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    username TEXT,
+    text TEXT
+)
+""")
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg:
+cur.execute("""
+CREATE TABLE IF NOT EXISTS orders(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id INTEGER,
+    username TEXT,
+    status TEXT,
+    description TEXT
+)
+""")
+
+db.commit()
+
+def client_menu():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📩 Написать художнице", callback_data="write")],
+        [InlineKeyboardButton(text="⭐ Оставить отзыв", callback_data="review")],
+        [InlineKeyboardButton(text="💬 Читать отзывы", callback_data="reviews")],
+        [InlineKeyboardButton(text="🖼 Примеры работ", callback_data="portfolio")],
+        [InlineKeyboardButton(text="💳 Стоимость", callback_data="price")],
+    ])
+
+def admin_panel():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📋 Мои заказы", callback_data="admin_orders")],
+        [InlineKeyboardButton(text="📨 Последние сообщения", callback_data="admin_last")],
+        [InlineKeyboardButton(text="⭐ Отзывы", callback_data="admin_reviews")],
+    ])
+
+@router.message(Command("start"))
+async def start(message: Message):
+    if message.from_user.id == ADMIN_ID:
+        await message.answer("Админ-панель:", reply_markup=admin_panel())
+    else:
+        await message.answer(
+            "Добро пожаловать в арт-бот! 🎨\nВыберите действие:",
+            reply_markup=client_menu()
+        )
+
+@router.callback_query(F.data == "write")
+async def client_write(callback: CallbackQuery):
+    await callback.message.answer("Напишите ваше сообщение художнице 👇")
+    dp["awaiting_msg"] = callback.from_user.id
+
+@router.message()
+async def handle_user_message(message: Message):
+    if dp.get("awaiting_msg") == message.from_user.id:
+        client = message.from_user
+
+        cur.execute("SELECT id FROM orders WHERE client_id=?", (client.id,))
+        row = cur.fetchone()
+
+        if not row:
+            cur.execute(
+                "INSERT INTO orders(client_id, username, status, description) VALUES (?, ?, ?, ?)",
+                (client.id, client.username, "new", message.text)
+            )
+            db.commit()
+            order_id = cur.lastrowid
+        else:
+            order_id = row[0]
+            cur.execute("UPDATE orders SET description=? WHERE id=?", (message.text, order_id))
+            db.commit()
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Ответить ✏", callback_data=f"reply_{client.id}")]
+        ])
+
+        await bot.send_message(
+            ADMIN_ID,
+            f"📩 Новое сообщение от @{client.username} (заказ #{order_id}):"
+        )
+        await message.copy_to(ADMIN_ID, reply_markup=kb)
+
+        await message.answer("Сообщение отправлено! ❤️")
+        dp.pop("awaiting_msg", None)
+
+@router.callback_query(F.data.startswith("reply_"))
+async def start_reply(callback: CallbackQuery):
+    user_id = int(callback.data.split("_")[1])
+    dp["reply_to"] = user_id
+    await callback.message.answer("Напишите ответ клиенту 👇")
+
+@router.message(F.from_user.id == ADMIN_ID)
+async def admin_reply(message: Message):
+    if "reply_to" not in dp:
         return
-    if msg.text == SPECIAL_CODE:
-        files = await list_files()
-        if not files:
-            await msg.reply_text("Архив пуст.")
-            return
-        for f in files:
-            await download_file(f.path_lower, f"temp_{f.name}")
-            with open(f"temp_{f.name}", "rb") as photo_file:
-                await msg.reply_photo(photo=photo_file)
-            os.remove(f"temp_{f.name}")
-        return
-    if msg.photo:
-        try:
-            file = await msg.photo[-1].get_file()
-            file_path = f"temp_{msg.from_user.id}.jpg"
-            await file.download_to_drive(file_path)
-            remote_name = os.path.basename(file_path)
-            await upload_to_dropbox(file_path, remote_name)
-            os.remove(file_path)
-            await msg.reply_text("Архивация паспортных данных прошла успешно!✅")
-        except Exception as e:
-            await msg.reply_text(f"Что-то пошло не так на этапе архивации. Обратитесь к администратору архива @Qshka16\nОшибка: {e}")
-        return
-    await msg.reply_text("Не удалось распознать. Идите нахуй.")
+    target = dp["reply_to"]
+    await message.copy_to(target)
+    await message.answer("Отправлено ✔")
+    dp.pop("reply_to", None)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Бот активен. Отправьте фото паспорта или спецкод.")
+@router.callback_query(F.data == "review")
+async def review_start(callback: CallbackQuery):
+    if callback.from_user.id == ADMIN_ID:
+        await callback.message.answer("Админ не может оставлять отзывы.")
+        return
+    dp["await_review"] = callback.from_user.id
+    await callback.message.answer("Напишите ваш отзыв 👇")
 
-if name == "main":
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.ALL, handle_message))
-    print("Бот запущен...")
-    app.run_polling()
+@router.message()
+async def save_review(message: Message):
+    if dp.get("await_review") == message.from_user.id:
+        cur.execute(
+            "INSERT INTO reviews(user_id, username, text) VALUES (?, ?, ?)",
+            (message.from_user.id, message.from_user.username, message.text)
+        )
+        db.commit()
+        await message.answer("Спасибо за отзыв! ❤️")
+        dp.pop("await_review", None)
+
+@router.callback_query(F.data == "reviews")
+async def show_reviews(callback: CallbackQuery):
+    cur.execute("SELECT username, text FROM reviews")
+    rows = cur.fetchall()
+
+    if not rows:
+        await callback.message.answer("Пока нет отзывов.")
+        return
+
+    text = "⭐ Отзывы:\n\n" + "\n\n".join([f"@{u}: {t}" for u, t in rows])
+    await callback.message.answer(text)
+
+@router.callback_query(F.data == "portfolio")
+async def show_portfolio(callback: CallbackQuery):
+    await callback.message.answer(
+        "🖼 *Примеры моих артов*\n\n"
+        "Смотреть здесь 👉 https://t.me/DeshBerch",
+        parse_mode="Markdown"
+    )
+
+@router.callback_query(F.data == "price")
+async def price_info(callback: CallbackQuery):
+    await callback.message.answer(
+        "💳 Информация о стоимости:\n\n"
+        "Скоро здесь появится подробный прайс ✨"
+    )
+
+@router.callback_query(F.data == "admin_orders")
+async def admin_orders(callback: CallbackQuery):
+    cur.execute("SELECT id, username, status FROM orders ORDER BY id DESC")
+    rows = cur.fetchall()
+
+    if not rows:
+        await callback.message.answer("Нет заказов.")
+        return
+
+    text = "📋 Список заказов:\n\n"
+    for oid, username, status in rows:
+        text += f"🔹 Заказ #{oid} — @{username} — статус: {status}\n"
+
+    await callback.message.answer(text)
+
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
