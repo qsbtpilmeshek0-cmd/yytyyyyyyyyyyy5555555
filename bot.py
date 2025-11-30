@@ -17,6 +17,9 @@ dp.include_router(router)
 db = sqlite3.connect("bot.db")
 cur = db.cursor()
 
+# Словарь для хранения, кому отвечает админ
+admin_reply_to = {}
+
 # Создаем таблицы
 cur.execute("""
 CREATE TABLE IF NOT EXISTS reviews(
@@ -40,11 +43,11 @@ db.commit()
 # Меню клиента
 def client_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📩 Написать арт", callback_data="write")],
+        [InlineKeyboardButton(text="📩 Написать художнице", callback_data="write")],
         [InlineKeyboardButton(text="⭐ Оставить отзыв", callback_data="review")],
         [InlineKeyboardButton(text="💬 Читать отзывы", callback_data="reviews")],
         [InlineKeyboardButton(text="🖼 Примеры работ", url="https://t.me/DeshBerch")],
-        [InlineKeyboardButton(text="💳 Прайс—лист артов", callback_data="price")],
+        [InlineKeyboardButton(text="💳 Стоимость", callback_data="price")],
     ])
 
 # Админ-панель
@@ -67,7 +70,7 @@ def order_status_buttons(order_id):
             InlineKeyboardButton(text="📦 Готов", callback_data=f"status_{order_id}_done")
         ],
         [
-            InlineKeyboardButton(text="💘 Оплачен", callback_data=f"status_{order_id}_paid"),
+            InlineKeyboardButton(text="💰 Оплачен", callback_data=f"status_{order_id}_paid"),
             InlineKeyboardButton(text="❌ Отменён", callback_data=f"status_{order_id}_cancel")
         ]
     ])
@@ -116,17 +119,18 @@ async def handle_user_message(message: Message):
 @router.callback_query(F.data.startswith("reply_"))
 async def start_reply(callback: CallbackQuery):
     user_id = int(callback.data.split("_")[1])
-    dp["reply_to"] = user_id
-    await callback.message.answer("Напишите ответ клиенту 👇 (люблю тебя очень сильно кстати💘)")
+    admin_reply_to[callback.from_user.id] = user_id
+    await callback.message.answer("Напишите ответ клиенту 👇")
 
 @router.message(F.from_user.id == ADMIN_ID)
 async def admin_reply(message: Message):
-    if "reply_to" not in dp:
+    if message.from_user.id not in admin_reply_to:
+        await message.answer("Выберите сначала, кому отвечать.")
         return
-    target = dp["reply_to"]
+    target = admin_reply_to[message.from_user.id]
     await bot.send_message(chat_id=target, text=message.text)
     await message.answer("Ответ отправлен ✔")
-    dp.pop("reply_to", None)
+    del admin_reply_to[message.from_user.id]
 
 # Оставление отзыва
 @router.callback_query(F.data == "review")
@@ -191,4 +195,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
