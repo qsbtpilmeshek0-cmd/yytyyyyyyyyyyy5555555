@@ -9,8 +9,8 @@ from aiogram.types import (
 )
 from aiogram.filters import Command
 
-TOKEN = "ТОКЕН_ТВОЕГО_БОТА"
-ADMIN_ID = 123456789
+TOKEN = "8471280186:AAETaSl-fgw7KAlWiqgrxvwCUqVW15eGv4k"
+ADMIN_ID = 1958789302
 
 bot = Bot(TOKEN)
 dp = Dispatcher()
