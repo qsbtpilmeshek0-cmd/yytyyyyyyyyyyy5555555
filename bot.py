@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 
-TOKEN = "8471280186:AAETaSl-fgw7KAlWiqgrxvwCUqVW15eGv4k"
+TOKEN = "ВАШ_ТОКЕН_БОТА"
 ADMIN_ID = 1958789302
 
 bot = Bot(TOKEN)
@@ -17,10 +17,10 @@ dp.include_router(router)
 db = sqlite3.connect("bot.db")
 cur = db.cursor()
 
-# Словарь для хранения, кому отвечает админ
-admin_reply_to = {}
+# Надёжное хранение, кому отвечает админ
+admin_reply_to = {}  # {admin_id: {"chat_id": client_chat_id, "last_message_id": msg_id}}
 
-# Создаем таблицы
+# Создание таблиц
 cur.execute("""
 CREATE TABLE IF NOT EXISTS reviews(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,37 +98,59 @@ async def handle_user_message(message: Message):
         if not row:
             cur.execute(
                 "INSERT INTO orders(client_id, username, status, description) VALUES (?, ?, ?, ?)",
-                (client.id, client.username, "new", message.text)
+                (client.id, client.username, "new", message.text or "Медиа сообщение")
             )
             db.commit()
             order_id = cur.lastrowid
         else:
             order_id = row[0]
-            cur.execute("UPDATE orders SET description=? WHERE id=?", (message.text, order_id))
+            desc = message.text if message.text else "Медиа сообщение"
+            cur.execute("UPDATE orders SET description=? WHERE id=?", (desc, order_id))
             db.commit()
+
         # Отправляем админу сообщение
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Ответить ✏", callback_data=f"reply_{client.id}")],
-            [InlineKeyboardButton(text="Изменить статус", callback_data=f"change_{order_id}")]
+            [InlineKeyboardButton(text="Ответить ✏", callback_data=f"reply_{client.id}_{message.message_id}")],
         ])
-        await bot.send_message(ADMIN_ID, f"📩 Новое сообщение от @{client.username} (заказ #{order_id}): {message.text}", reply_markup=kb)
-        await message.answer("Сообщение отправлено! ❤️")
+        await bot.send_message(ADMIN_ID, f"📩 Новое сообщение от @{client.username} (заказ #{order_id})", reply_markup=kb)
+        await message.answer("Сообщение отправлено!💘")
         dp.pop("awaiting_msg", None)
 
-# Админ отвечает клиенту
+# Админ нажал кнопку “Ответить”
 @router.callback_query(F.data.startswith("reply_"))
 async def start_reply(callback: CallbackQuery):
-    user_id = int(callback.data.split("_")[1])
-    admin_reply_to[callback.from_user.id] = user_id
-    await callback.message.answer("Напишите ответ клиенту 👇")
+    parts = callback.data.split("_")
+    client_id = int(parts[1])
+    msg_id = int(parts[2])
+    admin_reply_to[callback.from_user.id] = {"chat_id": client_id, "last_message_id": msg_id}
+    await callback.message.answer("Напиши ответ заказчику")
 
+# Универсальный ответ админа
 @router.message(F.from_user.id == ADMIN_ID)
 async def admin_reply(message: Message):
     if message.from_user.id not in admin_reply_to:
-        await message.answer("Выберите сначала, кому отвечать.")
+        await message.answer("Выберите  кому отвечать.")
         return
-    target = admin_reply_to[message.from_user.id]
-    await bot.send_message(chat_id=target, text=message.text)
+
+    info = admin_reply_to[message.from_user.id]
+    chat_id = info["chat_id"]
+
+    # Текст
+    if message.text:
+        await bot.send_message(chat_id=chat_id, text=message.text)
+
+    # Фото
+    elif message.photo:
+        await bot.send_photo(chat_id=chat_id, photo=message.photo[-1].file_id, caption=message.caption or "")
+
+    # Документ
+    elif message.document:
+        await bot.send_document(chat_id=chat_id, document=message.document.file_id, caption=message.caption or "")
+
+    # Видео
+    elif message.video:
+        await bot.send_video(chat_id=chat_id, video=message.video.file_id, caption=message.caption or "")
+
     await message.answer("Ответ отправлен ✔")
     del admin_reply_to[message.from_user.id]
 
@@ -168,7 +190,7 @@ async def show_portfolio(callback: CallbackQuery):
 async def price_info(callback: CallbackQuery):
     await callback.message.answer("💳 Информация о стоимости:\n\nСкоро здесь появится подробный прайс ✨")
 
-# Админ панель: показать заказы
+# Админ: показать заказы
 @router.callback_query(F.data == "admin_orders")
 async def admin_orders(callback: CallbackQuery):
     cur.execute("SELECT id, username, status, description FROM orders ORDER BY id DESC")
@@ -179,7 +201,23 @@ async def admin_orders(callback: CallbackQuery):
     for oid, username, status, desc in rows:
         await callback.message.answer(
             f"🔹 Заказ #{oid} — @{username}\nСтатус: {status}\nОписание: {desc}",
-            reply_markup=order_status_buttons(oid)
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="🆕 Новый", callback_data=f"status_{oid}_new"),
+                    InlineKeyboardButton(text="⏳ В обработке", callback_data=f"status_{oid}_processing")
+                ],
+                [
+                    InlineKeyboardButton(text="🖌 В работе", callback_data=f"status_{oid}_work"),
+                    InlineKeyboardButton(text="📦 Готов", callback_data=f"status_{oid}_done")
+                ],
+                [
+                    InlineKeyboardButton(text="💰 Оплачен", callback_data=f"status_{oid}_paid"),
+                    InlineKeyboardButton(text="❌ Отменён", callback_data=f"status_{oid}_cancel")
+                ],
+                [
+                    InlineKeyboardButton(text="Ответить ✏", callback_data=f"reply_{callback.from_user.id}_{oid}")
+                ]
+            ])
         )
 
 # Изменение статуса заказа
@@ -195,3 +233,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+        
