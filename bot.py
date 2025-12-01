@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 
-TOKEN = "ВАШ_ТОКЕН_БОТА"
+TOKEN = "8471280186:AAETaSl-fgw7KAlWiqgrxvwCUqVW15eGv4k"
 ADMIN_ID = 1958789302
 
 bot = Bot(TOKEN)
