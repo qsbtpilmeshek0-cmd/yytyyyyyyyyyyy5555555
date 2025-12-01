@@ -1,12 +1,10 @@
-# I LOVE DESH BEARCHHHHH
-
 import asyncio
 import sqlite3
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 
-TOKEN = "8471280186:AAETaSl-fgw7KAlWiqgrxvwCUqVW15eGv4k"
+TOKEN = "ВАШ_ТОКЕН_БОТА"
 ADMIN_ID = 1958789302
 
 bot = Bot(TOKEN)
@@ -14,13 +12,13 @@ dp = Dispatcher()
 router = Router()
 dp.include_router(router)
 
+# Подключение к базе (создаётся автоматически)
 db = sqlite3.connect("bot.db")
 cur = db.cursor()
 
-# Словарь для хранения, кому отвечает админ
-admin_reply_to = {}  # {admin_id: {"chat_id": client_chat_id, "message_id": client_message_id}}
+admin_reply_to = {}  # словарь для отслеживания, кому отвечает админ
 
-# Создаем таблицы
+# Создание таблиц, если их нет
 cur.execute("""
 CREATE TABLE IF NOT EXISTS reviews(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,10 +91,8 @@ async def client_write(callback: CallbackQuery):
 async def handle_user_message(message: Message):
     if dp.get("awaiting_msg") == message.from_user.id:
         client = message.from_user
-        # Сохраняем текст сообщения или помечаем как "Медиа"
         text_for_order = message.text or "Медиа сообщение"
 
-        # Сохраняем заказ
         cur.execute("SELECT id FROM orders WHERE client_id=?", (client.id,))
         row = cur.fetchone()
         if not row:
@@ -111,7 +107,6 @@ async def handle_user_message(message: Message):
             cur.execute("UPDATE orders SET description=? WHERE id=?", (text_for_order, order_id))
             db.commit()
 
-        # Отправляем админу сообщение с кнопкой Ответить
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Ответить ✏", callback_data=f"reply_{client.id}_{message.message_id}")]
         ])
@@ -138,12 +133,20 @@ async def admin_reply(message: Message):
     info = admin_reply_to[message.from_user.id]
     chat_id = info["chat_id"]
 
-    # Пересылаем любое сообщение клиента
-    await message.copy_to(chat_id)
+    # Отправка любого типа сообщения
+    if message.text:
+        await bot.send_message(chat_id, message.text)
+    elif message.photo:
+        await bot.send_photo(chat_id, message.photo[-1].file_id, caption=message.caption or "")
+    elif message.document:
+        await bot.send_document(chat_id, message.document.file_id, caption=message.caption or "")
+    elif message.video:
+        await bot.send_video(chat_id, message.video.file_id, caption=message.caption or "")
+
     await message.answer("Ответ отправлен ✔")
     del admin_reply_to[message.from_user.id]
 
-# Оставление отзыва
+# Оставление отзывов
 @router.callback_query(F.data == "review")
 async def review_start(callback: CallbackQuery):
     if callback.from_user.id == ADMIN_ID:
@@ -161,6 +164,7 @@ async def save_review(message: Message):
         await message.answer("Спасибо за отзыв! ❤️")
         dp.pop("await_review", None)
 
+# Показ отзывов
 @router.callback_query(F.data == "reviews")
 async def show_reviews(callback: CallbackQuery):
     cur.execute("SELECT username, text FROM reviews")
@@ -171,10 +175,12 @@ async def show_reviews(callback: CallbackQuery):
     text = "⭐ Отзывы:\n\n" + "\n\n".join([f"@{u}: {t}" for u, t in rows])
     await callback.message.answer(text)
 
+# Примеры работ
 @router.callback_query(F.data == "portfolio")
 async def show_portfolio(callback: CallbackQuery):
     await callback.message.answer("🖼 *Примеры моих артов*\n\nСмотреть здесь 👉 https://t.me/DeshBerch", parse_mode="Markdown")
 
+# Стоимость
 @router.callback_query(F.data == "price")
 async def price_info(callback: CallbackQuery):
     await callback.message.answer("💳 Информация о стоимости:\n\nСкоро здесь появится подробный прайс ✨")
@@ -201,8 +207,10 @@ async def change_status(callback: CallbackQuery):
     db.commit()
     await callback.message.answer(f"Статус заказа #{order_id} обновлён на {status}")
 
+# Запуск бота
 async def main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
+    
